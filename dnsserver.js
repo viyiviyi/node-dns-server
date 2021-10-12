@@ -47,9 +47,9 @@ async function getDnsByServer(domain) {
 }
 async function getCache(domain) {
     let domainCache = cache[domain];
-    if (!domainCache || domainCache.length == 0) return undefined;
+    if (!domainCache || domainCache.length == 0) return '0.0.0.0';
     let cacheItem = domainCache[0]
-    if (!cacheItem) return undefined;
+    if (!cacheItem) return '0.0.0.0';
     if (cacheItem.ttl <= Date.now()) getDnsByServer(domain);
     return cacheItem.value;
 }
