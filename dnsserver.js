@@ -47,9 +47,9 @@ async function getDnsByServer(domain) {
 }
 async function getCache(domain) {
     let domainCache = cache[domain];
-    if (!domainCache || domainCache.length == 0) return '0.0.0.0';
+    if (!domainCache || domainCache.length == 0) return undefined;
     let cacheItem = domainCache[0]
-    if (!cacheItem) return '0.0.0.0';
+    if (!cacheItem) return undefined;
     if (cacheItem.ttl <= Date.now()) getDnsByServer(domain);
     return cacheItem.value;
 }
@@ -80,7 +80,7 @@ async function getDns(domain) {
         return ip
     }
     await getDnsByServer(domain)
-    return await getCache(domain);
+    return await getCache(domain) || '0.0.0.0';
 }
 async function dnsResove(msg, domain, type = 1, rinfo) {
     let timeStart = Date.now();
