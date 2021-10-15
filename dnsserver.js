@@ -134,7 +134,7 @@ function sendResult(query, type, value) {
     }
 }
 
-server.listen(9053, '0.0.0.0', function () {
+server.listen(53, '0.0.0.0', function () {
     console.log('DNS server started on port 53');
 });
 
