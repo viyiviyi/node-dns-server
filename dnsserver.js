@@ -1,8 +1,9 @@
-const dgram = require('dgram');
-const server = dgram.createSocket('udp4');
 const https = require('https');
 let hosts = {}
 const cache = {}
+var named = require('lts-dns-server-lib');
+var server = named.createServer();
+var ttl = 0;
 
 setTimeout(() => {
     let keys = Object.keys(cache)
@@ -75,85 +76,76 @@ function setCache(domain, answerList) {
 }
 
 async function getDns(domain) {
-    let ip = await getCache(domain);
+    let ip = getHost(domain) || await getCache(domain);
     if (ip) {
         return ip
     }
     await getDnsByServer(domain)
     return await getCache(domain) || '0.0.0.0';
 }
-async function dnsResove(msg, domain, type = 1, rinfo) {
-    let timeStart = Date.now();
-    let ip = await getDns(domain, type)
-    console.log("getDns:", domain, "==>", ip, ' ', Date.now() - timeStart, 'ms');
-    resolve(ip, msg, rinfo)
-}
-
-function parseHost(msg) { //转换域名
-    let num = msg[0];
-    let offset = 1;
-    let host = "";
-    while (num !== 0) {
-        host += (msg.slice(offset, offset + num).toString());
-        offset += num;
-        num = msg[offset];
-        offset += 1;
-        if (num !== 0) host += ('.');
-    }
-    return host;
-}
-
-function resolve(ip, msg, rinfo) { //响应
-    let len = msg.length;
-    let templet
-    if (ip)
-        templet = [192, 12, 0, 1, 0, 1, 0, 0, 0, 218, 0, 4].concat(ip.split(".").map(i => Number(i)));
-    else
-        templet = [192, 12, 0, 3, 0, 1, 0, 0, 0, 218, 0, 4];
-    const response = new ArrayBuffer(len + 16);
-    var bufView = new Uint8Array(response);
-    for (let i = 0; i < msg.length; i++) bufView[i] = msg[i];
-    for (let i = 0; i < templet.length; i++) bufView[msg.length + i] = templet[i];
-    bufView[2] = 129;
-    bufView[3] = 128;
-    bufView[7] = 1;
-    server.send(bufView, rinfo.port, rinfo.address, (err) => {
-        if (err) {
-            console.log(err);
-            // server.close();
-        }
-    })
-}
 
 function getHost(host) {
     hosts = require('./dnsserver.json')
     let ip = hosts[host]
+    let reg = /^\*\./;
     if (ip) return ip
     let ah = Object.keys(hosts);
+
     for (let i = 0, l = ah.length; i < l; i++) {
-        if (host.indexOf('.' + ah[i]) != -1) return hosts[ah[i]];
+        if (reg.test(ah) && host.indexOf(ah[i].substring(1)) != -1) return hosts[ah[i]];
     }
 }
 
-server.on('message', (msg, rinfo) => {
-    let host = parseHost(msg.slice(12));
-    if (typeof host == 'string') host = host.toLowerCase()
-    if (host.length == 0) resolve('127.0.0.1', msg, rinfo);
-    let ip = getHost(host)
-    if (ip) {
-        console.log("hosts:", host, "==>", ip);
-        resolve(ip, msg, rinfo);
-    } else {
-        dnsResove(msg, host, 1, rinfo)
+function sendResult(query, type, value) {
+    var domain = query.name()
+    switch (type) {
+        case 'A':
+            var record = new named.ARecord(value);
+            query.addAnswer(domain, record, ttl);
+            break;
+        case 'AAAA':
+            var record = new named.AAAARecord(value);
+            query.addAnswer(domain, record, ttl);
+            break;
+        case 'CNAME':
+            var record = new named.CNAMERecord(value);
+            query.addAnswer(domain, record, ttl);
+            break;
+        case 'NS':
+            var record = new named.NSRecord(value);
+            query.addAnswer(domain, record, ttl);
+            break;
+        case 'MX':
+            var record = new named.MXRecord(value);
+            query.addAnswer(domain, record, ttl);
+            break;
+        case 'SOA':
+            var record = new named.SOARecord(value);
+            query.addAnswer(domain, record, ttl);
+            break;
+        case 'SRV':
+            var record = new named.SRVRecord(value, 5060);
+            query.addAnswer(domain, record, ttl);
+            break;
+        case 'TXT':
+            var record = new named.TXTRecord(value);
+            query.addAnswer(domain, record, ttl);
+            break;
     }
-})
+}
 
-server.on('error', (err) => {
-    console.log('server error:' + err.stack);
-    // server.close();
-})
-server.on('listening', () => {
-    const addr = server.address();
-    console.log(`run ${addr.address}:${addr.port}`);
-})
-server.bind(53);
+server.listen(9053, '0.0.0.0', function () {
+    console.log('DNS server started on port 53');
+});
+
+server.on('query', function (query) {
+    getDns(query.name()).then(val => {
+        console.log("query ", query.type(), ' :', query.name(), "==>", val);
+        sendResult(query, 'A', val);
+        server.send(query);
+    })
+});
+
+server.on('error', function (e) {
+    console.log('server error', e);
+});

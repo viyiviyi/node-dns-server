@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "lts-dns-server-lib": "^0.1.6"
+  }
+}
