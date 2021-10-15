@@ -37,6 +37,13 @@ async function getDnsByServer(domain) {
             if (v.type == 1) {
                 ip = v.data
                 v.name = domain
+                v.type = 'A'
+                AnswerList.push(v)
+            }
+            if (v.type == 28) {
+                ip = v.data
+                v.name = domain
+                v.type = 'AAAA'
                 AnswerList.push(v)
             }
         })
@@ -44,15 +51,20 @@ async function getDnsByServer(domain) {
         // console.log('error')
     }
     setCache(domain, AnswerList)
-    return AnswerList
+    return AnswerList.map(item => {
+        return createRecord(item.data, item.type)
+    })
 }
-async function getCache(domain) {
+async function getCache(query) {
+    let domain = query.name();
     let domainCache = cache[domain];
     if (!domainCache || domainCache.length == 0) return undefined;
     let cacheItem = domainCache[0]
     if (!cacheItem) return undefined;
     if (cacheItem.ttl <= Date.now()) getDnsByServer(domain);
-    return cacheItem.value;
+    return domainCache.map(val => {
+        return createRecord(val.value, val.type)
+    });
 }
 function setCache(domain, answerList) {
     let domainCache = cache[domain];
@@ -61,7 +73,7 @@ function setCache(domain, answerList) {
     answerList.forEach((answerItem, idx) => {
         if (!answerItem || !answerItem.data) return;
         let cacheIndex = domainCache.findIndex(f => f.value == answerItem.data);
-        if (cacheIndex == -1) return domainCache.push({ value: answerItem.data, ttl: answerItem.TTL * 1000 + time, sortin: 1 })
+        if (cacheIndex == -1) return domainCache.push({ value: answerItem.data, ttl: answerItem.TTL * 1000 + time, sortin: 1, type: answerItem.type })
         let _cItem = domainCache[cacheIndex]
         if (_cItem) {
             if (!idx) _cItem.sortin ? _cItem.sortin += 1 : _cItem.sortin = 1
@@ -73,15 +85,6 @@ function setCache(domain, answerList) {
         domainCache[cacheIndex] = _cItem
     })
     cache[domain] = domainCache.sort((n, i) => (n.sortin == i.sortin ? i.ttl - n.ttl : i.sortin - n.sortin))
-}
-
-async function getDns(domain) {
-    let ip = getHost(domain) || await getCache(domain);
-    if (ip) {
-        return ip
-    }
-    await getDnsByServer(domain)
-    return await getCache(domain) || '0.0.0.0';
 }
 
 function getHost(host) {
@@ -96,53 +99,64 @@ function getHost(host) {
     }
 }
 
-function sendResult(query, type, value) {
-    var domain = query.name()
+function createRecord(value, type) {
     switch (type) {
         case 'A':
-            var record = new named.ARecord(value);
-            query.addAnswer(domain, record, ttl);
-            break;
+            return new named.ARecord(value);
         case 'AAAA':
-            var record = new named.AAAARecord(value);
-            query.addAnswer(domain, record, ttl);
-            break;
+            return new named.AAAARecord(value);
         case 'CNAME':
-            var record = new named.CNAMERecord(value);
-            query.addAnswer(domain, record, ttl);
-            break;
+            return new named.CNAMERecord(value);
         case 'NS':
-            var record = new named.NSRecord(value);
-            query.addAnswer(domain, record, ttl);
-            break;
+            return new named.NSRecord(value);
         case 'MX':
-            var record = new named.MXRecord(value);
-            query.addAnswer(domain, record, ttl);
-            break;
+            return new named.MXRecord(value);
         case 'SOA':
-            var record = new named.SOARecord(value);
-            query.addAnswer(domain, record, ttl);
-            break;
+            return new named.SOARecord(value);
         case 'SRV':
-            var record = new named.SRVRecord(value, 5060);
-            query.addAnswer(domain, record, ttl);
-            break;
+            return new named.SRVRecord(value, 5060);
         case 'TXT':
-            var record = new named.TXTRecord(value);
-            query.addAnswer(domain, record, ttl);
-            break;
+            return new named.TXTRecord(value);
     }
+}
+
+function sendResult(query, value, rtype) {
+    var domain = query.name();
+    let type = rtype || query.type();
+    query.addAnswer(domain, createRecord(value, type), ttl);
 }
 
 server.listen(53, '0.0.0.0', function () {
     console.log('DNS server started on port 53');
 });
 
-server.on('query', function (query) {
-    getDns(query.name()).then(val => {
-        console.log("query ", query.type(), ' :', query.name(), "==>", val);
-        sendResult(query, 'A', val);
+server.on('query', async function (query) {
+    let domain = query.name()
+    let host = getHost(domain);
+    if (host) {
+        console.log("query ", query.type(), ' host :', domain, "==>", host);
+        sendResult(query, val, 'A');
         server.send(query);
+        return;
+    }
+    let res = await getCache(query)
+    console.log("query ", query.type(), ' cache :', domain, "==>", res);
+    res && res.length && res.forEach(record => {
+        query.addAnswer(domain, record, ttl);
+    });
+    if (res && res.length) {
+        server.send(query);
+        return;
+    }
+    await getDnsByServer(query.name()).then(res => {
+        console.log("query ", query.type(), ' aldns :', domain, "==>", res);
+        res.forEach(record => {
+            query.addAnswer(domain, record, ttl);
+        });
+        if (res.length) {
+            server.send(query);
+            return;
+        }
     })
 });
 
