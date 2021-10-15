@@ -132,15 +132,18 @@ server.listen(53, '0.0.0.0', function () {
 
 server.on('query', async function (query) {
     let domain = query.name()
+    let type = query.type();
+    if (type != 'A') return server.send(query);
     let host = getHost(domain);
     if (host) {
-        console.log("query ", query.type(), ' host :', domain, "==>", host);
+        console.log("query ", type, ' host :', domain, "==>", host);
         sendResult(query, val, 'A');
         server.send(query);
         return;
     }
-    let res = await getCache(query)
-    console.log("query ", query.type(), ' cache :', domain, "==>", res);
+    let res = await getCache(query) || []
+    res = res.filter(v => v._type == type)
+    console.log("query ", type, ' cache :', domain, "==>", res);
     res && res.length && res.forEach(record => {
         query.addAnswer(domain, record, ttl);
     });
@@ -148,16 +151,16 @@ server.on('query', async function (query) {
         server.send(query);
         return;
     }
-    await getDnsByServer(query.name()).then(res => {
-        console.log("query ", query.type(), ' aldns :', domain, "==>", res);
-        res.forEach(record => {
-            query.addAnswer(domain, record, ttl);
-        });
-        if (res.length) {
-            server.send(query);
-            return;
-        }
-    })
+    res = await getDnsByServer(domain)
+    res = res.filter(v => v._type == type)
+    console.log("query ", type, ' aldns :', domain, "==>", res);
+    res.forEach(record => {
+        query.addAnswer(domain, record, ttl);
+    });
+    if (res.length) {
+        server.send(query);
+        return;
+    }
 });
 
 server.on('error', function (e) {
