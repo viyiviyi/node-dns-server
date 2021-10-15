@@ -1,5 +1,15 @@
 {
-  "dependencies": {
-    "lts-dns-server-lib": "^0.1.6"
-  }
+    "dependencies": {
+        "lts-dns-server-lib": "^0.1.6",
+        "node-cache": "^5.1.2"
+    },
+    "scripts": {
+        "start": "node server-index.js"
+    },
+    "name": "node-dns-server",
+    "version": "1.0.0",
+    "main": "dns-server-index.js",
+    "repository": "https://gitee.com/yiyiooo/node-dns-server.git",
+    "author": "yiyiooo <yiyiooo@outlook.com>",
+    "license": "MIT"
 }
