@@ -5,21 +5,11 @@ node dns服务器
 https加密连接阿里dns 223.5.5.5
 防dns劫持
 
-#### 软件架构
-软件架构说明
-
-
-#### 安装教程
-
-1.  xxxx
-2.  xxxx
-3.  xxxx
-
 #### 使用说明
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+1.  克隆到本地
+2.  yarn start 或 node dns-server-index.js 启动
+3.  可使用pm2使任务在后台执行
 
 #### 参与贡献
 

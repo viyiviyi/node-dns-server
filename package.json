@@ -4,7 +4,7 @@
         "node-cache": "^5.1.2"
     },
     "scripts": {
-        "start": "node server-index.js"
+        "start": "node dns-server-index.js"
     },
     "name": "node-dns-server",
     "version": "1.0.0",
